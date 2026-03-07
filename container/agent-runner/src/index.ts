@@ -132,14 +132,15 @@ async function readStdin(): Promise<string> {
   });
 }
 
-function processLines(buffer: string, onLine: (line: string) => void): void {
+function processLines(buffer: string, onLine: (line: string) => void): string {
   const lines = buffer.split('\n');
-  buffer = lines.pop() || '';
+  const remaining = lines.pop() || '';
   for (const line of lines) {
     if (line.trim()) {
       onLine(line);
     }
   }
+  return remaining;
 }
 
 async function runQuery(
@@ -216,7 +217,7 @@ async function runQuery(
 
   child.stdout.on('data', (data) => {
     bufferedOutput += data.toString();
-    processLines(bufferedOutput, (line) => {
+    bufferedOutput = processLines(bufferedOutput, (line) => {
       log(`[opencode line] ${line.substring(0, 100)}`);
 
       try {
