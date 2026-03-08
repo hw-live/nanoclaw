@@ -3,22 +3,23 @@
 This group is for working with the inventory-system project in an isolated workspace.
 
 ## Project Location
-- **Container Path**: `/workspace/extra/inventory-system`
+- **Path in container**: `/workspace/group/inventory-system-worktree`
 - This is a git worktree of the main inventory-management-system repository
-- The worktree is mounted from host at `/root/src/nanoclaw/groups/discord_main/inventory-system-worktree`
+- Located inside the worktree is the full inventory management system codebase
+- Git remote: `git@github.com:hw-live/inventory-management-system.git`
 
 ## Current State
 - Working on the inventory management system codebase
 - Isolated from other groups for focused work
-- Git remote: `git@github.com:hw-live/inventory-management-system.git`
+- The worktree contains: backend/, frontend/, cmd/, internal/
 
 ## Agent Configuration
-- Working directory: `/workspace/group` (group folder)
-- Project files are mounted at: `/workspace/extra/inventory-system`
+- Working directory: `/workspace/group` (the group folder)
+- Worktree is at: `/workspace/group/inventory-system-worktree`
 - Backend: Go/Gin/SQLite
 - Frontend: React/TypeScript/Vite
 
 ## Usage
 - Use `@NanoClaw` to trigger assistance
-- The agent will have access to the worktree files at `/workspace/extra/inventory-system`
-- When referring to the project, use the path `/workspace/extra/inventory-system`
+- The agent will have access to the worktree files at `/workspace/group/inventory-system-worktree`
+- All git operations can be performed directly in `/workspace/group/inventory-system-worktree`
