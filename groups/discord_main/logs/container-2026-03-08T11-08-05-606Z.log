@@ -1,0 +1,21 @@
+=== Container Run Log ===
+Timestamp: 2026-03-08T11:08:05.607Z
+Group: NanoClaw Discord
+IsMain: true
+Duration: 1822005ms
+Exit Code: 0
+Stdout Truncated: false
+Stderr Truncated: false
+
+=== Input Summary ===
+Prompt length: 170 chars
+Session ID: new
+
+=== Mounts ===
+/workspace/project (ro)
+/workspace/project/.env (ro)
+/workspace/group
+/home/node/.claude
+/workspace/ipc
+/app/src
+/workspace/extra/inventory-system
