@@ -112,6 +112,22 @@ function buildVolumeMounts(
     }
   }
 
+  // Mount SSH identity files if they exist (for Git authentication)
+  const sshDir = path.join(process.env.HOME || '/root', '.ssh');
+  if (fs.existsSync(sshDir)) {
+    for (const file of fs.readdirSync(sshDir)) {
+      if (file === 'known_hosts' || file === 'config') continue;
+      const sshFilePath = path.join(sshDir, file);
+      if (fs.statSync(sshFilePath).isFile()) {
+        mounts.push({
+          hostPath: sshFilePath,
+          containerPath: `/home/node/.ssh/${file}`,
+          readonly: true,
+        });
+      }
+    }
+  }
+
   // Per-group Claude sessions directory (isolated from other groups)
   // Each group gets their own .claude/ to prevent cross-group session access
   const groupSessionsDir = path.join(

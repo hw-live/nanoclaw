@@ -25,11 +25,18 @@ RUN npm install
 # Copy source code
 COPY agent-runner/ ./
 
+# Copy SSH known hosts for GitHub
+COPY .github_known_hosts /home/node/.ssh/known_hosts
+RUN chmod 644 /home/node/.ssh/known_hosts
+
 # Build TypeScript
 RUN npm run build
 
 # Create workspace directories
 RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/messages /workspace/ipc/tasks /workspace/ipc/input
+
+# Create .ssh directory and set up Git authentication
+RUN mkdir -p /home/node/.ssh && chmod 700 /home/node/.ssh
 
 # Create entrypoint script
 # Secrets are passed via stdin JSON — temp file is deleted immediately after Node reads it
@@ -45,6 +52,10 @@ ENV CLAUDE_CODE_DIRECTORIES=/workspace/extra
 
 # Switch to non-root user (required for --dangerously-skip-permissions)
 USER node
+
+# Configure Git in the container
+RUN git config --global user.email "nanoclaw@huwe-0306" && \
+    git config --global user.name "NanoClaw"
 
 # Set working directory to group workspace
 WORKDIR /workspace/group
