@@ -60,6 +60,7 @@ let lastTimestamp = '';
 let sessions: Record<string, string> = {};
 let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
+let lastSentMessage: Record<string, string> = {};
 let messageLoopRunning = false;
 
 const channels: Channel[] = [];
@@ -203,6 +204,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   await channel.setTyping?.(chatJid, true);
   let hadError = false;
   let outputSentToUser = false;
+  const sentMessages = new Set<string>();
 
   const output = await runAgent(group, prompt, chatJid, async (result) => {
     // Streaming output callback — called for each agent result
@@ -213,10 +215,51 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
           : JSON.stringify(result.result);
       // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
       const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
-      logger.info({ group: group.name }, `Agent output: ${raw.slice(0, 200)}`);
+      logger.info(
+        {
+          group: group.name,
+          textLength: text.length,
+          textPreview: text.slice(0, 100),
+        },
+        `Agent output received`,
+      );
       if (text) {
-        await channel.sendMessage(chatJid, text);
-        outputSentToUser = true;
+        if (sentMessages.has(text)) {
+          logger.warn(
+            { group: group.name },
+            `Duplicate message detected, skipping`,
+          );
+          return;
+        }
+        // Check if this is the same as the last message sent to this group
+        if (lastSentMessage[chatJid] === text) {
+          logger.warn(
+            {
+              group: group.name,
+              chatJid,
+              lastMessage: lastSentMessage[chatJid]?.slice(0, 50),
+              currentMessage: text.slice(0, 50),
+            },
+            `Same as last message, skipping`,
+          );
+          return;
+        }
+        sentMessages.add(text);
+        lastSentMessage[chatJid] = text;
+        logger.info(
+          { group: group.name, textLength: text.length },
+          `Sending message to user`,
+        );
+        try {
+          await channel.sendMessage(chatJid, text);
+          outputSentToUser = true;
+        } catch (err) {
+          logger.error(
+            { group: group.name, chatJid, err },
+            'Failed to send message',
+          );
+          hadError = true;
+        }
       }
       // Only reset idle timer on actual results, not session-update markers (result: null)
       resetIdleTimer();
@@ -545,14 +588,28 @@ async function main(): Promise<void> {
         return;
       }
       const text = formatOutbound(rawText);
-      if (text) await channel.sendMessage(jid, text);
+      if (text) {
+        // Check for duplicate message (same as last sent)
+        if (lastSentMessage[jid] === text) {
+          logger.warn({ jid }, 'Scheduler: same as last message, skipping');
+          return;
+        }
+        lastSentMessage[jid] = text;
+        await channel.sendMessage(jid, text);
+      }
     },
   });
   startIpcWatcher({
-    sendMessage: (jid, text) => {
+    sendMessage: async (jid, text) => {
       const channel = findChannel(channels, jid);
       if (!channel) throw new Error(`No channel for JID: ${jid}`);
-      return channel.sendMessage(jid, text);
+      // Check for duplicate message (same as last sent)
+      if (lastSentMessage[jid] === text) {
+        logger.warn({ jid }, 'IPC: same as last message, skipping');
+      } else {
+        lastSentMessage[jid] = text;
+        await channel.sendMessage(jid, text);
+      }
     },
     registeredGroups: () => registeredGroups,
     registerGroup,

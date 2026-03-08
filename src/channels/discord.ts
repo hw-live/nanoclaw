@@ -51,7 +51,8 @@ export class DiscordChannel implements Channel {
 
       // Get bot's user ID to mark our own messages
       const botId = this.client?.user?.id;
-      const isFromSelf = botId && message.author.id === botId;
+      const isFromSelf =
+        botId && message.author.id && message.author.id === botId;
 
       const channelId = message.channelId;
       const chatJid = `dc:${channelId}`;
@@ -79,21 +80,44 @@ export class DiscordChannel implements Channel {
       // when the bot is @mentioned.
       if (this.client?.user) {
         const botId = this.client.user.id;
+        logger.debug(
+          { botId, content: content.slice(0, 100) },
+          'Discord: checking mentions',
+        );
+        // Check for user mentions: <@botId> or <@!botId>
         const isBotMentioned =
           message.mentions.users.has(botId) ||
           content.includes(`<@${botId}>`) ||
           content.includes(`<@!${botId}>`);
+        // Also check for role mention: <@&botId> (Discord sometimes sends this)
+        const isRoleMentioned = content.includes(`<@&${botId}>`);
 
-        if (isBotMentioned) {
+        logger.debug(
+          { isBotMentioned, isRoleMentioned, content: content.slice(0, 100) },
+          'Discord: mention check result',
+        );
+
+        if (isBotMentioned || isRoleMentioned) {
           // Strip the <@botId> mention to avoid visual clutter
           content = content
             .replace(new RegExp(`<@!?${botId}>`, 'g'), '')
+            .replace(new RegExp(`<@&${botId}>`, 'g'), '')
             .trim();
+          logger.debug(
+            { content: content.slice(0, 100) },
+            'Discord: after stripping mentions',
+          );
           // Prepend trigger if not already present
           if (!TRIGGER_PATTERN.test(content)) {
             content = `@${ASSISTANT_NAME} ${content}`;
+            logger.debug(
+              { content: content.slice(0, 100) },
+              'Discord: after prepending trigger',
+            );
           }
         }
+      } else {
+        logger.warn('Discord: client.user is not available');
       }
 
       // Handle attachments — store placeholders so the agent knows something was sent
@@ -163,8 +187,8 @@ export class DiscordChannel implements Channel {
         sender_name: senderName,
         content,
         timestamp,
-        is_from_me: isFromSelf,
-        is_bot_message: isFromSelf,
+        is_from_me: !!isFromSelf,
+        is_bot_message: !!isFromSelf,
       });
 
       logger.info(

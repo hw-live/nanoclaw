@@ -35,10 +35,13 @@ RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/
 # Secrets are passed via stdin JSON — temp file is deleted immediately after Node reads it
 # Follow-up messages arrive via IPC files in /workspace/ipc/input/
 # The TypeScript is pre-built during Docker build, skip recompilation at runtime
-RUN printf '#!/bin/bash\nset -e\ncat > /tmp/input.json\nnode /app/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+RUN printf '#!/bin/bash\nset -e\n# Fix permissions for mounted IPC directory (may be root-owned on host)\nchmod -R 777 /workspace/ipc 2>/dev/null || true\ncat > /tmp/input.json\nnode /app/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Set ownership to node user (non-root) for writable directories
 RUN chown -R node:node /workspace && chmod 777 /home/node
+
+# Set environment variable for opencode to allow access to /workspace/extra
+ENV CLAUDE_CODE_DIRECTORIES=/workspace/extra
 
 # Switch to non-root user (required for --dangerously-skip-permissions)
 USER node

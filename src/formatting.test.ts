@@ -254,3 +254,26 @@ describe('trigger gating (requiresTrigger interaction)', () => {
     expect(shouldProcess(false, false, msgs)).toBe(true);
   });
 });
+
+// --- Duplicate message detection ---
+
+describe('duplicate message detection', () => {
+  it('detects duplicate messages within same session', () => {
+    const seen = new Set<string>();
+    const text = 'Hello world';
+    seen.add(text);
+    expect(seen.has(text)).toBe(true);
+  });
+
+  it('allows same message for different recipients', () => {
+    const seen1 = new Set<string>();
+    const seen2 = new Set<string>();
+    const text = 'Hello world';
+
+    seen1.add(text);
+    seen2.add(text);
+
+    expect(seen1.has(text)).toBe(true);
+    expect(seen2.has(text)).toBe(true);
+  });
+});

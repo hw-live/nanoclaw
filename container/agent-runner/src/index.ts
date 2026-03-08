@@ -215,6 +215,8 @@ async function runQuery(
   };
   setTimeout(pollIpcDuringQuery, IPC_POLL_MS);
 
+  let lastOutput: string | null = null;
+
   child.stdout.on('data', (data) => {
     bufferedOutput += data.toString();
     bufferedOutput = processLines(bufferedOutput, (line) => {
@@ -233,23 +235,28 @@ async function runQuery(
           log(`Session initialized: ${newSessionId}`);
         }
 
+        let outputText: string | undefined;
         if (event.type === 'result' && event.result) {
-          log(`Result: ${event.result.slice(0, 200)}`);
-          writeOutput({
-            status: 'success',
-            result: event.result,
-            newSessionId,
-          });
+          outputText =
+            typeof event.result === 'string'
+              ? event.result
+              : JSON.stringify(event.result);
         } else if (event.type === 'text') {
-          // Opencode text events have content in event.text or event.part.text
-          const text = event.text || (event.part && event.part.text);
-          if (text) {
-            log(`Text result: ${text.slice(0, 200)}`);
+          outputText = event.text || (event.part && event.part.text);
+        }
+
+        if (outputText) {
+          const trimmed = outputText.trim();
+          if (trimmed !== lastOutput) {
+            lastOutput = trimmed;
+            log(`Output: ${trimmed.slice(0, 200)}`);
             writeOutput({
               status: 'success',
-              result: text,
+              result: outputText,
               newSessionId,
             });
+          } else {
+            log(`Skipping duplicate output`);
           }
         }
       } catch (err) {

@@ -122,28 +122,38 @@ function buildVolumeMounts(
   );
   fs.mkdirSync(groupSessionsDir, { recursive: true });
   const settingsFile = path.join(groupSessionsDir, 'settings.json');
-  if (!fs.existsSync(settingsFile)) {
-    fs.writeFileSync(
-      settingsFile,
-      JSON.stringify(
-        {
-          env: {
-            // Enable agent swarms (subagent orchestration)
-            // https://code.claude.com/docs/en/agent-teams#orchestrate-teams-of-claude-code-sessions
-            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-            // Load CLAUDE.md from additional mounted directories
-            // https://code.claude.com/docs/en/memory#load-memory-from-additional-directories
-            CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
-            // Enable Claude's memory feature (persists user preferences between sessions)
-            // https://code.claude.com/docs/en/memory#manage-auto-memory
-            CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
-          },
+  const defaultSettings = {
+    env: {
+      // Enable agent swarms (subagent orchestration)
+      // https://code.claude.com/docs/en/agent-teams#orchestrate-teams-of-claude-code-sessions
+      CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+      // Load CLAUDE.md from additional mounted directories
+      // https://code.claude.com/docs/en/memory#load-memory-from-additional-directories
+      CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
+      // Enable Claude's memory feature (persists user preferences between sessions)
+      // https://code.claude.com/docs/en/memory#manage-auto-memory
+      CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
+      // Allow access to /workspace/extra for additional project directories
+      CLAUDE_CODE_DIRECTORIES: '/workspace/extra',
+    },
+  };
+
+  let settings: typeof defaultSettings = defaultSettings;
+  if (fs.existsSync(settingsFile)) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+      // Merge with defaults, preserving any existing settings
+      settings = {
+        env: {
+          ...defaultSettings.env,
+          ...(existing.env || {}),
         },
-        null,
-        2,
-      ) + '\n',
-    );
+      };
+    } catch {
+      // If parsing fails, use defaults
+    }
   }
+  fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
 
   // Sync skills from container/skills/ into each group's .claude/skills/
   const skillsSrc = path.join(process.cwd(), 'container', 'skills');
@@ -231,15 +241,25 @@ function buildContainerArgs(
 ): string[] {
   const args: string[] = ['run', '-i', '--rm', '--name', containerName];
 
+  // Memory limit to prevent OOM kills (exit code 137)
+  args.push('--memory', '4g');
+
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
 
   // Run as host user so bind-mounted files are accessible.
-  // Skip when running as root (uid 0), as the container's node user (uid 1000),
-  // or when getuid is unavailable (native Windows without WSL).
+  // When running as root, run as root in container too to avoid permission issues
+  // with mounted directories owned by root.
   const hostUid = process.getuid?.();
   const hostGid = process.getgid?.();
-  if (hostUid != null && hostUid !== 0 && hostUid !== 1000) {
+  if (hostUid == null) {
+    // getuid unavailable (e.g., native Windows)
+    args.push('-u', 'root');
+  } else if (hostUid === 0) {
+    // Running as root - run as root in container to avoid permission issues
+    args.push('-u', 'root');
+  } else if (hostUid !== 1000) {
+    // Running as non-root, non-1000 user
     args.push('--user', `${hostUid}:${hostGid}`);
     args.push('-e', 'HOME=/home/node');
   }
